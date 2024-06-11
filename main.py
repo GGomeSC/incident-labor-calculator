@@ -66,9 +66,7 @@ def main():
         start_time = time.time()  # Record the start time
         config = load_config()
         root_folder = config['root_folder']
-        # root_folder = r'path_to_Attendance_Reports_folder'  # Replace with your folder path
         output_directory = config['output_directory']
-        # output_directory = r'path_to_Output_folder'  # Define the output directory
         output_file = 'total_duration_per_participant_per_incident.xlsx'
 
         # Make sure that you match exactly the strings of the columns that you want to extract. 'Duração' and 'Enviar e-mail' are from Attendance Reports using a Portuguese Google Workspace
