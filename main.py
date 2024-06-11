@@ -1,3 +1,6 @@
+# Calculates the total time of attendance in meetings for each participant in each incident
+# Created by GGomeSC, 11.06.2024
+
 import pandas as pd
 import os
 import re
