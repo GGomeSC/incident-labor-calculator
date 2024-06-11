@@ -5,16 +5,29 @@ import pandas as pd
 import os
 import re
 import json
+import logging
 import time
 
-def load_config(): # Create a config.json file in the same directory as this script and speficy the root_folder's path and output_directory'path that you want
-    # Specify the full path to the config file
-    dir_path = os.path.dirname(os.path.realpath(__file__))  # Gets the directory where the script is located
-    config_path = os.path.join(dir_path, 'config.json')  # Path to the config file
-    print("Current working directory:", os.getcwd())
-    with open(config_path, 'r') as config_file:
-        return json.load(config_file)
 
+# Logging config
+logging.basicConfig(filename='execution_log.log', level=logging.INFO, format='%(asctime)s:%(levelname)s:%(message)s')
+
+# Create a config.json file in the same directory as this script and speficy the root_folder's path and output_directory'path that you want
+def load_config():
+    try:
+        # Specify the full path to the config file
+        dir_path = os.path.dirname(os.path.realpath(__file__))  # Gets the directory where the script is located
+        config_path = os.path.join(dir_path, 'config.json')  # Path to the config file
+        print("Current working directory:", os.getcwd())
+        with open(config_path, 'r') as config_file:
+            return json.load(config_file)
+    except FileNotFoundError:
+        logging.error("Configuration file not found. Ensure there is a 'config.json' file in the same directory as the script.")
+        raise FileNotFoundError("Configuration file not found. Please ensure there is a 'config.json' file in the same directory as the script.")
+    except json.JSONDecodeError:
+        logging.error("Configuration file is not valid JSON.")
+        raise json.JSONDecodeError("Configuration file is not valid JSON.")
+   
 def parse_duration(duration_str):
     total_minutes = 0
     if pd.isna(duration_str):
@@ -49,35 +62,37 @@ def aggregate_excel_files(root_folder):
     return aggregated_df
 
 def main():
-    start_time = time.time()  # Record the start time
-    config = load_config()
-    root_folder = config['root_folder']
-    # root_folder = r'path_to_Attendance_Reports_folder'  # Replace with your folder path
-    output_directory = config['output_directory']
-    # output_directory = r'path_to_Output_folder'  # Define the output directory
-    output_file = 'total_duration_per_participant_per_incident.xlsx'
+    try:
+        start_time = time.time()  # Record the start time
+        config = load_config()
+        root_folder = config['root_folder']
+        output_directory = config['output_directory']
+        output_file = 'total_duration_per_participant_per_incident.xlsx'
 
-    # Make sure that you match exactly the strings of the columns that you want to extract. 'Duração' and 'Enviar e-mail' are from Attendance Reports using a Portuguese Google Workspace
-    df = aggregate_excel_files(root_folder)
-    df['Incident ID'] = df['Incident Info'].str.extract(r'(GV-\d+)') # Regex that extracts the incident ID from that meeting title, in our case it's "GV-"
-    df['Incident ID'] = df['Incident ID'].fillna(df['Incident Info'])
-    df['Duration in minutes'] = df['Duração'].apply(parse_duration)
-    aggregated_df = df.groupby(['Incident ID', 'Enviar e-mail']).agg({'Duration in minutes': 'sum'}).reset_index()
-    aggregated_df['Meetings Attended'] = df.groupby(['Incident ID', 'Enviar e-mail'])['Incident Info'].transform('nunique')
-    aggregated_df['Formatted Duration'] = aggregated_df['Duration in minutes'].apply(minutes_to_hours)
+        # Make sure that you match exactly the strings of the columns that you want to extract. 'Duração' and 'Enviar e-mail' are from Attendance Reports using a Portuguese Google Workspace
+        df = aggregate_excel_files(root_folder)
+        df['Incident ID'] = df['Incident Info'].str.extract(r'(GV-\d+)') # Regex that extracts the incident ID from that meeting title, in our case it's "GV-"
+        df['Incident ID'] = df['Incident ID'].fillna(df['Incident Info'])
+        df['Duration in minutes'] = df['Duração'].apply(parse_duration)
+        aggregated_df = df.groupby(['Incident ID', 'Enviar e-mail']).agg({'Duration in minutes': 'sum'}).reset_index()
+        aggregated_df['Meetings Attended'] = df.groupby(['Incident ID', 'Enviar e-mail'])['Incident Info'].transform('nunique')
+        aggregated_df['Formatted Duration'] = aggregated_df['Duration in minutes'].apply(minutes_to_hours)
 
-    # Ensure the output directory exists
-    if not os.path.exists(output_directory):
-        os.makedirs(output_directory)
-        print("Creating the output directory...")
-    
-    # Save the file to the specified directory
-    aggregated_df.to_excel(os.path.join(output_directory, output_file), index=False)
-    print(f"Data has been aggregated and saved to '{os.path.join(output_directory, output_file)}'.")
-    
-    end_time = time.time()  # Record the end time
-    execution_time = end_time - start_time
-    print(f"Total execution time: {execution_time:.2f} seconds")
+        # Ensure the output directory exists
+        if not os.path.exists(output_directory):
+            os.makedirs(output_directory)
+            print("Creating the output directory...")
+        
+        # Save the file to the specified directory
+        aggregated_df.to_excel(os.path.join(output_directory, output_file), index=False)
+        print(f"Data has been aggregated and saved to '{os.path.join(output_directory, output_file)}'.")
+        
+        end_time = time.time()  # Record the end time
+        execution_time = end_time - start_time
+        logging.info(f"Total execution time: {execution_time:.2f} seconds")
+    except Exception as e:
+        logging.error(f"An error occurred: {str(e)}")
+        print(f"An error occurred: {str(e)}")
 
 if __name__ == '__main__':
     main()
