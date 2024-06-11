@@ -1,0 +1,4 @@
+{
+    "root_folder": "path_to_Attendance_Reports_folder",
+    "output_directory": "path_to_desired_Output_folder"
+}
