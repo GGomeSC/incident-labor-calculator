@@ -57,6 +57,7 @@ def main():
     # output_directory = r'path_to_Output_folder'  # Define the output directory
     output_file = 'total_duration_per_participant_per_incident.xlsx'
 
+    # Make sure that you match exactly the strings of the columns that you want to extract. 'Duração' and 'Enviar e-mail' are from Attendance Reports using a Portuguese Google Workspace
     df = aggregate_excel_files(root_folder)
     df['Incident ID'] = df['Incident Info'].str.extract(r'(GV-\d+)') # Regex that extracts the incident ID from that meeting title, in our case it's "GV-"
     df['Incident ID'] = df['Incident ID'].fillna(df['Incident Info'])
