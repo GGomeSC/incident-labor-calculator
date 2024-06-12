@@ -48,7 +48,7 @@ def calculate_total_labor_cost(df, wage_info):
 
     # Format the total durations per role
     for role in costs_and_durations['Duration in minutes'].columns:
-        costs_and_durations[('Formatted Duration', role)] = costs_and_durations['Duration in minutes'][role].apply(minutes_to_hours)
+        costs_and_durations[('Duration', role)] = costs_and_durations['Duration in minutes'][role].apply(minutes_to_hours)
         print("Converting minutes to hours...")
 
     # Sum costs by incident to get total cost
@@ -108,7 +108,7 @@ def main():
         df['Duration in minutes'] = df['Duração'].apply(parse_duration)
         aggregated_df = df.groupby(['Incident ID', 'Enviar e-mail']).agg({'Duration in minutes': 'sum'}).reset_index()
         aggregated_df['Meetings Attended'] = df.groupby(['Incident ID', 'Enviar e-mail'])['Incident Info'].transform('nunique')
-        aggregated_df['Formatted Duration'] = aggregated_df['Duration in minutes'].apply(minutes_to_hours)
+        aggregated_df['Duration'] = aggregated_df['Duration in minutes'].apply(minutes_to_hours)
         print("Converting minutes to hours...")
 
         try:
