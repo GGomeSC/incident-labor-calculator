@@ -28,7 +28,10 @@ def load_config():
 
 def load_wage_info():
     try:
-        with open('wage_info.json', 'r') as wage_file:
+        # Full path to the wage_info.json file
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        wage_file_path = os.path.join(dir_path, 'wage_info.json')
+        with open(wage_file_path, 'r') as wage_file:
             return json.load(wage_file)
     except FileNotFoundError:
         raise FileNotFoundError("Wage information file not found. Please ensure there is a 'wage_info.json' in the script's directory.")
