@@ -8,8 +8,6 @@ import json
 import logging
 import time
 
-
-# Logging config
 logging.basicConfig(filename='execution_log.log', level=logging.INFO, format='%(asctime)s:%(levelname)s:%(message)s')
 
 # Create a config.json file in the same directory as this script and speficy the root_folder's path and output_directory'path that you want
@@ -27,7 +25,37 @@ def load_config():
     except json.JSONDecodeError:
         logging.error("Configuration file is not valid JSON.")
         raise json.JSONDecodeError("Configuration file is not valid JSON.")
-   
+
+def load_wage_info():
+    try:
+        with open('wage_info.json', 'r') as wage_file:
+            return json.load(wage_file)
+    except FileNotFoundError:
+        raise FileNotFoundError("Wage information file not found. Please ensure there is a 'wage_info.json' in the script's directory.")
+    except json.JSONDecodeError:
+        raise Exception("Wage information file is not valid JSON. Please check the 'wage_info.json' for errors.")
+
+def calculate_total_labor_cost(df, wage_info):
+    # Map email to role and then role to wage
+    df['Role'] = df['Enviar e-mail'].map(wage_info['employees']).fillna('Supplier')
+    df['Hourly Wage'] = df['Role'].map(wage_info['wages'])
+    # Calculate cost for each entry
+    df['Cost'] = df['Duration in minutes'] / 60 * df['Hourly Wage']
+
+    # Calculate the total cost and total duration per role for each incident
+    aggregation_functions = {'Cost': 'sum', 'Duration in minutes': 'sum'}
+    costs_and_durations = df.pivot_table(values=['Cost', 'Duration in minutes'], index='Incident ID', columns='Role', aggfunc=aggregation_functions, fill_value=0)
+
+    # Format the total durations per role
+    for role in costs_and_durations['Duration in minutes'].columns:
+        costs_and_durations[('Formatted Duration', role)] = costs_and_durations['Duration in minutes'][role].apply(minutes_to_hours)
+        print("Converting minutes to hours...")
+
+    # Sum costs by incident to get total cost
+    costs_and_durations['Total Cost (R$)'] = costs_and_durations['Cost'].sum(axis=1)
+
+    return costs_and_durations.reset_index()
+
 def parse_duration(duration_str):
     total_minutes = 0
     if pd.isna(duration_str):
@@ -46,7 +74,6 @@ def parse_duration(duration_str):
 def minutes_to_hours(minutes):
     hours = minutes // 60
     remainder_minutes = minutes % 60
-    print("Converting minutes to hours...")
     return f"{hours}:{remainder_minutes:02d}"
 
 def aggregate_excel_files(root_folder):
@@ -58,34 +85,45 @@ def aggregate_excel_files(root_folder):
                 df = pd.read_excel(file_path)
                 df['Incident Info'] = os.path.basename(subdir)  # Assign file name to Incident Info
                 aggregated_df = pd.concat([aggregated_df, df], ignore_index=True)
-                print("Aggregating all in one Excel file...")
     return aggregated_df
 
 def main():
     try:
+        wage_info = load_wage_info()
         start_time = time.time()  # Record the start time
         config = load_config()
         root_folder = config['root_folder']
         output_directory = config['output_directory']
-        output_file = 'total_duration_per_participant_per_incident.xlsx'
+        output_file = 'total_cost_per_incident.xlsx'
+        # Ensure the output directory exists
+        if not os.path.exists(output_directory):
+            os.makedirs(output_directory)
+            print("Creating the output directory...")
 
         # Make sure that you match exactly the strings of the columns that you want to extract. 'Duração' and 'Enviar e-mail' are from Attendance Reports using a Portuguese Google Workspace
-        df = aggregate_excel_files(root_folder)
+        df = aggregate_excel_files(root_folder) 
+        print("Aggregating all in one Excel file...")
         df['Incident ID'] = df['Incident Info'].str.extract(r'(GV-\d+)') # Regex that extracts the incident ID from that meeting title, in our case it's "GV-"
         df['Incident ID'] = df['Incident ID'].fillna(df['Incident Info'])
         df['Duration in minutes'] = df['Duração'].apply(parse_duration)
         aggregated_df = df.groupby(['Incident ID', 'Enviar e-mail']).agg({'Duration in minutes': 'sum'}).reset_index()
         aggregated_df['Meetings Attended'] = df.groupby(['Incident ID', 'Enviar e-mail'])['Incident Info'].transform('nunique')
         aggregated_df['Formatted Duration'] = aggregated_df['Duration in minutes'].apply(minutes_to_hours)
+        print("Converting minutes to hours...")
 
-        # Ensure the output directory exists
-        if not os.path.exists(output_directory):
-            os.makedirs(output_directory)
-            print("Creating the output directory...")
+        try:
+            total_costs_durations = calculate_total_labor_cost(df, wage_info)
+            print(total_costs_durations)
+            # Flatten the columns if necessary (for multi-level columns)
+            total_costs_durations.columns = [' '.join(col).strip() for col in total_costs_durations.columns.values]
+        except KeyError as e:
+            print(f"Column not found in DataFrame: {e}")
+        except Exception as e:
+            print(f"An error occurred: {e}")
         
         # Save the file to the specified directory
-        aggregated_df.to_excel(os.path.join(output_directory, output_file), index=False)
-        print(f"Data has been aggregated and saved to '{os.path.join(output_directory, output_file)}'.")
+        total_costs_durations.to_excel(os.path.join(output_directory, output_file), index=False)
+        logging.info(f"Total cost data saved to '{os.path.join(output_directory, output_file)}'.")
         
         end_time = time.time()  # Record the end time
         execution_time = end_time - start_time
