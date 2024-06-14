@@ -1,0 +1,15 @@
+{
+    "wages": {
+        "Manager": 41.10,
+        "Coordinator": 20.55,
+        "Specialist": 16.44,
+        "Senior": 13.70,
+        "Middle": 10.96,
+        "Junior": 6.85,
+        "Supplier": 5.48
+    },
+    "employees": {
+        "example_manager@email.com": "Manager",
+        "example_coordinator@email.com": "Coordinator"
+    }
+}

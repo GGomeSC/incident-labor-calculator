@@ -46,16 +46,25 @@ def calculate_total_labor_cost(df, wage_info):
     df['Cost'] = df['Duration in minutes'] / 60 * df['Hourly Wage']
 
     # Calculate the total cost and total duration per role for each incident
-    aggregation_functions = {'Cost': 'sum', 'Duration in minutes': 'sum'}
-    costs_and_durations = df.pivot_table(values=['Cost', 'Duration in minutes'], index='Incident ID', columns='Role', aggfunc=aggregation_functions, fill_value=0)
+    costs_and_durations = df.groupby(['Incident ID', 'Role']).agg(
+        Total_Cost=('Cost', 'sum'),
+        Total_Duration=('Duration in minutes', 'sum')
+    ).unstack(fill_value=0)
 
-    # Format the total durations per role
-    for role in costs_and_durations['Duration in minutes'].columns:
-        costs_and_durations[('Duration', role)] = costs_and_durations['Duration in minutes'][role].apply(minutes_to_hours)
-        print("Converting minutes to hours...")
+    # Flatten the columns for easier handling
+    costs_and_durations.columns = [' '.join(col).strip() for col in costs_and_durations.columns.values]
 
-    # Sum costs by incident to get total cost
-    costs_and_durations['Total Cost (R$)'] = costs_and_durations['Cost'].sum(axis=1)
+    # Calculate Meetings Attended separately
+    meetings_attended = df.groupby('Incident ID')['Incident Info'].nunique().rename('Meetings Attended')
+
+    # Join meetings attended to the flattened DataFrame
+    costs_and_durations = costs_and_durations.join(meetings_attended, on='Incident ID')
+    # Flatten the columns for easier handling, especially if saving to Excel
+    costs_and_durations.columns = [' '.join(col).strip() if isinstance(col, tuple) else col for col in costs_and_durations.columns.values]
+
+    # Sum costs and durations across roles for each incident
+    costs_and_durations['Total Duration (min)'] = costs_and_durations.filter(like='Total_Duration').sum(axis=1)
+    costs_and_durations['Total Cost (R$)'] = costs_and_durations.filter(like='Total_Cost').sum(axis=1)
 
     return costs_and_durations.reset_index()
 
@@ -98,6 +107,7 @@ def main():
         root_folder = config['root_folder']
         output_directory = config['output_directory']
         output_file = 'total_cost_per_incident.xlsx'
+
         # Ensure the output directory exists
         if not os.path.exists(output_directory):
             os.makedirs(output_directory)
@@ -113,7 +123,7 @@ def main():
         aggregated_df['Meetings Attended'] = df.groupby(['Incident ID', 'Enviar e-mail'])['Incident Info'].transform('nunique')
         aggregated_df['Duration'] = aggregated_df['Duration in minutes'].apply(minutes_to_hours)
         print("Converting minutes to hours...")
-
+        
         try:
             total_costs_durations = calculate_total_labor_cost(df, wage_info)
             print(total_costs_durations)
@@ -123,7 +133,7 @@ def main():
             print(f"Column not found in DataFrame: {e}")
         except Exception as e:
             print(f"An error occurred: {e}")
-        
+
         # Save the file to the specified directory
         total_costs_durations.to_excel(os.path.join(output_directory, output_file), index=False)
         logging.info(f"Total cost data saved to '{os.path.join(output_directory, output_file)}'.")
